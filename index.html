@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTL RECORDS44 | Studio Manager</title>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+    <style>
+        :root { --gold: #ffd700; --dark: #0b0b0b; --card: #151515; --input-bg: #222; --text-gray: #aaa; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: all 0.2s; }
+        body { background: var(--dark); color: #fff; margin: 0; padding-bottom: 50px; }
+        header { background: #000; padding: 20px; text-align: center; border-bottom: 2px solid var(--gold); }
+        h1 { color: var(--gold); margin: 0; font-size: 24px; letter-spacing: 2px; }
+        .container { max-width: 600px; margin: auto; padding: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; border-left: 4px solid var(--gold); margin-top: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        input, select, textarea, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #333; background: var(--input-bg); color: #fff; outline: none; }
+        button { background: var(--gold); color: #000; font-weight: bold; cursor: pointer; border: none; text-transform: uppercase; margin-top: 15px; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+        button.secondary { background: #333; color: #fff; }
+        .hidden { display: none !important; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; float: right; }
+        .status-PENDING { background: #ffc107; color: #000; }
+        .status-APPROVED { background: #28a745; color: #fff; }
+    </style>
+</head>
+
+<body>
+    <header><h1>🎵 GTL RECORDS44</h1></header>
+
+    <div class="container">
+        <div id="authView">
+            <div class="card">
+                <h2 id="authTitle" style="color:var(--gold); margin-top:0;">Artist Login</h2>
+                <input id="authEmail" type="email" placeholder="Email Address">
+                <input id="authPass" type="password" placeholder="Password">
+                <button onclick="handleAuth()" id="authBtn">Login</button>
+                <span style="color:var(--gold); cursor:pointer; font-size:13px; display:block; text-align:center; margin-top:10px;" onclick="toggleAuthMode()">New here? Create an account</span>
+            </div>
+        </div>
+
+        <div id="artistDash" class="hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Hi, <span id="userDisp" style="color:var(--gold)"></span></h2>
+                <button onclick="logout()" class="secondary" style="width:auto; margin:0;">Logout</button>
+            </div>
+            <div class="card">
+                <h3>Book Session</h3>
+                <select id="service">
+                    <option>Recording Session (1hr)</option>
+                    <option>Recording Session (2hrs)</option>
+                    <option>Mixing & Mastering</option>
+                </select>
+                <input type="date" id="bookDate">
+                <input type="time" id="bookTime">
+                <textarea id="notes" placeholder="Notes (Project name, BPM...)" rows="2"></textarea>
+                <button onclick="submitBooking()" id="submitBtn">Request Booking</button>
+            </div>
+            <div id="history"></div>
+        </div>
+
+        <div id="adminDash" class="hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="color:var(--gold)">Admin Dashboard</h2>
+                <button onclick="logout()" class="secondary" style="width:auto;">Logout</button>
+            </div>
+            <div id="adminList"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- CONFIGS ---
+        const ADMIN_EMAIL = "gtlrecords44@gmail.com";
+        const firebaseConfig = { 
+            apiKey: "AIzaSyD6XKgyi5JrnMS8gChPX_vytYV6nRELLPM", 
+            authDomain: "gtlrecords44-30a2b.firebaseapp.com", 
+            projectId: "gtlrecords44-30a2b" 
+        };
+        
+        const EMAILJS_PUBLIC_KEY = "Vt8sYPk16RSvIfEMQ"; 
+        const EMAILJS_SERVICE_ID = "service_km8fhqd";
+        const WELCOME_TEMPLATE_ID = "template_amlvjzf"; 
+
+        // --- GITHUB SAFETY LOAD ---
+        function initEmailJS() {
+            if (window.emailjs) {
+                window.emailjs.init(EMAILJS_PUBLIC_KEY);
+                console.log("EmailJS Library Loaded Successfully");
+            } else {
+                console.log("EmailJS not ready, retrying...");
+                setTimeout(initEmailJS, 500);
+            }
+        }
+        initEmailJS();
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const bookingsCol = collection(db, "bookings");
+
+        let isRegister = false;
+
+        window.toggleAuthMode = () => { 
+            isRegister = !isRegister; 
+            document.getElementById('authTitle').innerText = isRegister ? "Create Account" : "Artist Login"; 
+            document.getElementById('authBtn').innerText = isRegister ? "Register" : "Login"; 
+        };
+        
+        window.handleAuth = async () => {
+            const btn = document.getElementById('authBtn');
+            const e = document.getElementById('authEmail').value, p = document.getElementById('authPass').value;
+            if (!e || !p) return alert("Fill all fields");
+            
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+
+            try {
+                if (isRegister) {
+                    await createUserWithEmailAndPassword(auth, e, p);
+                    
+                    if (window.emailjs) {
+                        await window.emailjs.send(EMAILJS_SERVICE_ID, WELCOME_TEMPLATE_ID, { user_email: e });
+                        alert("Account created and welcome email sent!");
+                    } else {
+                        alert("Account created, but email failed to send (service busy).");
+                    }
+                } else {
+                    await signInWithEmailAndPassword(auth, e, p);
+                }
+            } catch (err) { 
+                alert(err.message); 
+            } finally {
+                btn.disabled = false;
+                btn.innerText = isRegister ? "Register" : "Login";
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        onAuthStateChanged(auth, u => {
+            const authView = document.getElementById('authView');
+            const artistDash = document.getElementById('artistDash');
+            const adminDash = document.getElementById('adminDash');
+            
+            authView.classList.toggle("hidden", !!u);
+            if (u) {
+                if (u.email === ADMIN_EMAIL) {
+                    adminDash.classList.remove("hidden");
+                    artistDash.classList.add("hidden");
+                    loadAdmin();
+                } else {
+                    artistDash.classList.remove("hidden");
+                    adminDash.classList.add("hidden");
+                    document.getElementById('userDisp').innerText = u.email.split("@")[0];
+                    loadArtistHistory();
+                }
+            } else {
+                artistDash.classList.add("hidden");
+                adminDash.classList.add("hidden");
+            }
+        });
+
+        window.submitBooking = async () => {
+            const btn = document.getElementById('submitBtn');
+            const d = document.getElementById('bookDate').value;
+            const t = document.getElementById('bookTime').value;
+            const s = document.getElementById('service').value;
+            const n = document.getElementById('notes').value;
+
+            if (!d || !t) return alert("Select Date & Time");
+            
+            btn.disabled = true;
+            try {
+                await addDoc(bookingsCol, { 
+                    artist: auth.currentUser.email, 
+                    service: s, 
+                    date: d, time: t, 
+                    notes: n, 
+                    status: "PENDING", createdAt: serverTimestamp() 
+                });
+                alert("Booking request sent!");
+                document.getElementById('notes').value = "";
+            } catch (err) { 
+                alert(err.message); 
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        function loadArtistHistory() {
+            onSnapshot(query(bookingsCol, where("artist", "==", auth.currentUser.email), orderBy("createdAt", "desc")), snap => {
+                document.getElementById('history').innerHTML = snap.docs.map(d => `
+                    <div class="card">
+                        <span class="badge status-${d.data().status}">${d.data().status}</span>
+                        <b>${d.data().service}</b><br>${d.data().date} @ ${d.data().time}
+                    </div>`).join("");
+            });
+        }
+
+        function loadAdmin() {
+            onSnapshot(query(bookingsCol, orderBy("createdAt", "desc")), snap => {
+                document.getElementById('adminList').innerHTML = snap.docs.map(d => `
+                    <div class="card">
+                        <span class="badge status-${d.data().status}">${d.data().status}</span>
+                        <b>Artist: ${d.data().artist}</b><br>
+                        ${d.data().service} | ${d.data().date} @ ${d.data().time}
+                        <div style="margin-top:10px;">
+                            <button onclick="approve('${d.id}')" style="width:auto; padding:5px 15px;">Approve</button>
+                            <button onclick="remove('${d.id}')" class="secondary" style="width:auto; padding:5px 15px; background:#dc3545;">Delete</button>
+                        </div>
+                    </div>`).join("");
+            });
+        }
+
+        window.approve = (id) => updateDoc(doc(db, "bookings", id), { status: "APPROVED" });
+        window.remove = (id) => confirm("Delete this booking?") && deleteDoc(doc(db, "bookings", id));
+    </script>
+</body>
+</html>
