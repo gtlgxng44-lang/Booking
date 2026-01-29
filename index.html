@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTL RECORDS44 | Studio Manager</title>
+
+<style>
+    /* --- CORE STYLES --- */
+    :root { --gold: #ffd700; --dark: #0b0b0b; --card: #151515; --input-bg: #222; --text-gray: #aaa; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: all 0.2s; }
+    body { background: var(--dark); color: #fff; margin: 0; padding-bottom: 50px; }
+    
+    header { background: #000; padding: 20px; text-align: center; border-bottom: 2px solid var(--gold); }
+    h1 { color: var(--gold); margin: 0; font-size: 24px; letter-spacing: 2px; }
+    
+    .container { max-width: 600px; margin: auto; padding: 20px; }
+    
+    .card { background: var(--card); padding: 20px; border-radius: 12px; border-left: 4px solid var(--gold); margin-top: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+    
+    input, select, textarea, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #333; background: var(--input-bg); color: #fff; outline: none; }
+    input:focus, select:focus { border-color: var(--gold); }
+    
+    button { background: var(--gold); color: #000; font-weight: bold; cursor: pointer; border: none; text-transform: uppercase; margin-top: 15px; }
+    button:hover { filter: brightness(1.1); }
+    button.secondary { background: #333; color: #fff; }
+    button.delete { background: #dc3545; color: #fff; font-size: 11px; padding: 8px; }
+    button.icon-btn { width: auto; padding: 5px 10px; margin: 0; font-size: 16px; background: transparent; color: var(--gold); border: 1px solid #333; }
+
+    .hidden { display: none !important; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; float: right; }
+    .status-PENDING { background: #ffc107; color: #000; }
+    .status-APPROVED { background: #28a745; color: #fff; }
+    
+    .toggle-link { color: var(--gold); cursor: pointer; font-size: 13px; text-align: center; display: block; margin-top: 15px; text-decoration: underline; }
+
+    /* --- CALENDAR STYLES --- */
+    .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+    .cal-day-name { font-size: 12px; color: var(--text-gray); font-weight: bold; padding-bottom: 5px; }
+    .cal-day { 
+        background: #1a1a1a; padding: 10px; border-radius: 6px; min-height: 50px; cursor: pointer; border: 1px solid #333; position: relative; display: flex; flex-direction: column; align-items: center; 
+    }
+    .cal-day:hover { border-color: var(--gold); background: #222; }
+    .cal-day.selected { border-color: var(--gold); background: #333; box-shadow: 0 0 10px var(--gold); }
+    .cal-day.empty { background: transparent; border: none; cursor: default; }
+    .cal-dot { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; margin-top: 4px; display: none; }
+    .cal-day.has-event .cal-dot { display: block; }
+    .cal-day.today { color: var(--gold); font-weight: bold; border: 1px dashed var(--gold); }
+
+    /* --- TIMELINE STYLES --- */
+    .timeline-slot { display: flex; align-items: flex-start; border-bottom: 1px solid #222; padding: 12px 0; }
+    .time-label { width: 70px; font-size: 12px; color: var(--gold); font-weight: bold; }
+    .slot-content { flex: 1; padding-left: 15px; border-left: 2px solid #333; }
+    .slot-booked { background: rgba(255, 215, 0, 0.1); border-left-color: var(--gold); border-radius: 0 8px 8px 0; padding: 8px; margin: -4px 0; }
+    .slot-empty { color: #444; font-size: 12px; font-style: italic; }
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🎵 GTL RECORDS44</h1>
+    <p style="font-size:12px; opacity:0.6;">Studio Booking Portal</p>
+</header>
+
+<div class="container">
+
+    <div id="authView">
+        <div class="card">
+            <h2 id="authTitle" style="color:var(--gold); margin-top:0;">Artist Login</h2>
+            <input id="authEmail" type="email" placeholder="Email Address">
+            <input id="authPass" type="password" placeholder="Password">
+            <button onclick="handleAuth()" id="authBtn">Login</button>
+            <span class="toggle-link" onclick="toggleAuthMode()">New here? Create an account</span>
+        </div>
+    </div>
+
+    <div id="artistDash" class="hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>Hi, <span id="userDisp" style="color:var(--gold)"></span></h2>
+            <button onclick="logout()" class="secondary" style="width:auto; margin:0; font-size:12px;">Logout</button>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top:0">Book Session</h3>
+            <select id="service">
+                <option>Recording Session (1hr)</option>
+                <option>Recording Session (2hrs)</option>
+                <option>Mixing & Mastering</option>
+                <option>Full Production</option>
+            </select>
+            <input type="date" id="bookDate">
+            <input type="time" id="bookTime">
+            <textarea id="notes" placeholder="Notes (Project name, BPM...)" rows="2"></textarea>
+            <button onclick="submitBooking()">Request Booking</button>
+        </div>
+
+        <h3 style="margin-top:30px; border-bottom:1px solid #333; padding-bottom:10px;">My Sessions</h3>
+        <div id="history">Loading...</div>
+    </div>
+
+    <div id="adminDash" class="hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="color:var(--gold); margin:0;">Admin Panel</h2>
+            <div>
+                <button onclick="toggleAdminView()" class="secondary" style="width:auto; margin:0; font-size:12px; margin-right:5px;">Calendar</button>
+                <button onclick="logout()" class="secondary" style="width:auto; margin:0; font-size:12px;">Logout</button>
+            </div>
+        </div>
+
+        <div id="calendarView" class="card">
+            <div class="cal-header">
+                <button class="icon-btn" onclick="changeMonth(-1)">&#9664;</button>
+                <span id="calMonthDisplay" style="font-weight:bold; font-size:18px;">Month Year</span>
+                <button class="icon-btn" onclick="changeMonth(1)">&#9654;</button>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+            <p style="font-size:11px; text-align:center; opacity:0.5; margin-top:10px;">Select a date to see hourly timeline</p>
+        </div>
+
+        <h3 id="listTitle" style="border-bottom:1px solid #333; padding-bottom:10px; margin-top:20px;">All Bookings</h3>
+        <div id="adminList"></div>
+    </div>
+
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // --- CONFIG ---
+    const ADMIN_EMAIL = "gtlrecords44@gmail.com"; 
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyD6XKgyi5JrnMS8gChPX_vytYV6nRELLPM", 
+        authDomain: "gtlrecords44-30a2b.firebaseapp.com",
+        projectId: "gtlrecords44-30a2b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const bookingsCol = collection(db, "bookings");
+
+    let isRegister = false;
+    let currentUser = null;
+    let allAdminBookings = [];
+    let currentDate = new Date();
+
+    // --- AUTH ---
+    window.toggleAuthMode = () => { isRegister = !isRegister; authTitle.innerText = isRegister ? "Register" : "Login"; authBtn.innerText = isRegister ? "Register" : "Login"; };
+    
+    window.handleAuth = async () => {
+        const e = authEmail.value, p = authPass.value;
+        if (!e || !p) return alert("Fill all fields");
+        try {
+            isRegister ? await createUserWithEmailAndPassword(auth, e, p) : await signInWithEmailAndPassword(auth, e, p);
+        } catch (err) { alert(err.message); }
+    };
+
+    window.logout = () => signOut(auth);
+
+    onAuthStateChanged(auth, u => {
+        currentUser = u;
+        authView.classList.toggle("hidden", !!u);
+        if (u) {
+            if (u.email === ADMIN_EMAIL) {
+                adminDash.classList.remove("hidden");
+                artistDash.classList.add("hidden");
+                initAdmin();
+            } else {
+                artistDash.classList.remove("hidden");
+                adminDash.classList.add("hidden");
+                userDisp.innerText = u.email.split("@")[0];
+                loadArtistHistory();
+            }
+        }
+    });
+
+    // --- ARTIST ---
+    window.submitBooking = async () => {
+        if (!bookDate.value || !bookTime.value) return alert("Date/Time required");
+        await addDoc(bookingsCol, {
+            artist: currentUser.email, service: service.value, date: bookDate.value, time: bookTime.value, notes: notes.value, status: "PENDING", createdAt: serverTimestamp()
+        });
+        alert("Request Sent"); 
+    };
+
+    function loadArtistHistory() {
+        onSnapshot(query(bookingsCol, where("artist", "==", currentUser.email), orderBy("createdAt", "desc")), snap => {
+            history.innerHTML = snap.empty ? '<div style="text-align:center;opacity:0.5">No bookings yet</div>' : snap.docs.map(renderCard).join("");
+        });
+    }
+
+    // --- ADMIN ---
+    function initAdmin() {
+        onSnapshot(query(bookingsCol, orderBy("createdAt", "desc")), snap => {
+            allAdminBookings = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            renderCalendar();
+            filterAdminList(null);
+        });
+    }
+
+    window.toggleAdminView = () => calendarView.classList.toggle("hidden");
+
+    window.changeMonth = (dir) => { currentDate.setMonth(currentDate.getMonth() + dir); renderCalendar(); };
+
+    function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        calMonthDisplay.innerText = new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' });
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const grid = document.getElementById("calGrid");
+        grid.innerHTML = `<div class="cal-day-name">S</div><div class="cal-day-name">M</div><div class="cal-day-name">T</div><div class="cal-day-name">W</div><div class="cal-day-name">T</div><div class="cal-day-name">F</div><div class="cal-day-name">S</div>`;
+        for(let i=0; i<firstDay; i++) grid.innerHTML += `<div class="cal-day empty"></div>`;
+        for(let d=1; d<=daysInMonth; d++) {
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const hasBooking = allAdminBookings.some(b => b.date === dateStr);
+            const div = document.createElement("div");
+            div.className = `cal-day ${hasBooking ? 'has-event' : ''}`;
+            div.innerHTML = `${d} <div class="cal-dot"></div>`;
+            div.onclick = () => {
+                document.querySelectorAll(".cal-day").forEach(el => el.classList.remove("selected"));
+                div.classList.add("selected");
+                renderTimeline(dateStr);
+            };
+            grid.appendChild(div);
+        }
+    }
+
+    function renderTimeline(date) {
+        listTitle.innerText = `Schedule for ${date}`;
+        const dayBookings = allAdminBookings.filter(b => b.date === date);
+        let html = '<div class="card">';
+        
+        // Render 8am to 10pm
+        for(let h=8; h<=22; h++) {
+            const hourStr = `${String(h).padStart(2,'0')}:00`;
+            const bookingsAtHour = dayBookings.filter(b => b.time.startsWith(String(h).padStart(2,'0')));
+            
+            html += `
+                <div class="timeline-slot">
+                    <div class="time-label">${h > 12 ? h-12 : h} ${h >= 12 ? 'PM' : 'AM'}</div>
+                    <div class="slot-content">
+                        ${bookingsAtHour.length > 0 ? 
+                            bookingsAtHour.map(b => `
+                                <div class="slot-booked">
+                                    <div style="font-weight:bold; font-size:14px;">${b.artist.split('@')[0]}</div>
+                                    <div style="font-size:11px; opacity:0.8;">${b.service}</div>
+                                    <button class="delete" onclick="remove('${b.id}')" style="padding:4px 8px; margin-top:5px; width:auto;">Cancel</button>
+                                </div>
+                            `).join('') : '<span class="slot-empty">Available</span>'}
+                    </div>
+                </div>`;
+        }
+        html += '</div><button class="secondary" onclick="filterAdminList(null)">Show All Bookings</button>';
+        adminList.innerHTML = html;
+    }
+
+    function filterAdminList(date) {
+        listTitle.innerText = "All Bookings";
+        adminList.innerHTML = allAdminBookings.length ? allAdminBookings.map(renderAdminCard).join("") : '<div style="text-align:center;opacity:0.5">No bookings</div>';
+    }
+
+    const renderCard = (d) => {
+        const b = d.data ? d.data() : d;
+        return `<div class="card"><span class="badge status-${b.status}">${b.status}</span><b style="color:var(--gold)">${b.service}</b><br>${b.date} @ ${b.time}</div>`;
+    };
+
+    const renderAdminCard = (b) => `
+        <div class="card">
+            <span class="badge status-${b.status}">${b.status}</span>
+            <b>${b.artist}</b><br><small>${b.service} | ${b.date} @ ${b.time}</small>
+            <div style="margin-top:10px; display:flex; gap:10px;">
+                ${b.status==='PENDING' ? `<button onclick="approve('${b.id}')" style="margin:0; padding:8px;">Approve</button>` : ''}
+                <button class="delete" onclick="remove('${b.id}')" style="margin:0;">Delete</button>
+            </div>
+        </div>`;
+
+    window.approve = id => updateDoc(doc(db, "bookings", id), { status: "APPROVED" });
+    window.remove = id => confirm("Delete permanently?") && deleteDoc(doc(db, "bookings", id));
+</script>
+</body>
+</html>
